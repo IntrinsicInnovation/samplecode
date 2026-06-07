@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stringr – Guitar Tab Player</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --accent:#e05a2b; --accent-dim:rgba(224,90,43,0.13);
+      --green:#2d9e6b; --green-dim:rgba(45,158,107,0.12);
+      --red:#d63030; --red-dim:rgba(214,48,48,0.10);
+      --blue:#2a72c8; --blue-dim:rgba(42,114,200,0.10);
+      --bg:#fff; --bg2:#f7f6f3; --bg3:#edeae4;
+      --text:#1a1916; --text2:#6b6860; --text3:#a8a49e;
+      --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.16);
+      --radius:8px; --radius-lg:12px;
+      --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      --mono:'SF Mono','Fira Code','Consolas',monospace;
+    }
+    @media(prefers-color-scheme:dark){:root{
+      --bg:#1a1916;--bg2:#242220;--bg3:#2e2b28;
+      --text:#f0ede8;--text2:#a8a49e;--text3:#6b6860;
+      --border:rgba(255,255,255,0.09);--border2:rgba(255,255,255,0.16);
+    }}
+    html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text)}
+    #app{display:flex;flex-direction:column;min-height:100vh}
+
+    /* ── Header ── */
+    #header{
+      background:var(--bg2);border-bottom:0.5px solid var(--border);
+      padding:10px 16px;display:flex;align-items:center;gap:14px;
+      position:sticky;top:0;z-index:200;
+    }
+    #logo{font-size:18px;font-weight:600;letter-spacing:-0.3px;white-space:nowrap;flex-shrink:0}
+    #logo span{color:var(--accent)}
+
+    /* ── Search box ── */
+    #search-wrap{flex:1;position:relative;min-width:0}
+    #search-input{
+      width:100%;height:36px;padding:0 36px 0 12px;font-size:13px;
+      border:0.5px solid var(--border2);border-radius:var(--radius);
+      background:var(--bg);color:var(--text);outline:none;
+    }
+    #search-input:focus{border-color:var(--accent)}
+    #search-input::placeholder{color:var(--text3)}
+    #search-clear{
+      position:absolute;right:10px;top:50%;transform:translateY(-50%);
+      font-size:16px;color:var(--text3);cursor:pointer;display:none;
+      line-height:1;background:none;border:none;padding:0;
+    }
+    #search-clear:hover{color:var(--text)}
+
+    /* ── Dropdown ── */
+    #search-dropdown{
+      display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+      background:var(--bg);border:0.5px solid var(--border2);
+      border-radius:var(--radius-lg);overflow:hidden;
+      box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:300;max-height:360px;overflow-y:auto;
+    }
+    #search-dropdown.show{display:block}
+    .dd-item{
+      padding:10px 14px;cursor:pointer;border-bottom:0.5px solid var(--border);
+      display:flex;flex-direction:column;gap:2px;
+    }
+    .dd-item:last-child{border-bottom:none}
+    .dd-item:hover{background:var(--bg2)}
+    .dd-item.active{background:var(--bg2)}
+    .dd-title{font-size:13px;font-weight:500;color:var(--text)}
+    .dd-artist{font-size:11px;color:var(--text2)}
+    .dd-empty{padding:16px;text-align:center;font-size:13px;color:var(--text3)}
+    .dd-loading{padding:12px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)}
+    .dd-spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+
+    /* ── Song meta ── */
+    #song-meta{display:none;padding:10px 16px;border-bottom:0.5px solid var(--border)}
+    #song-title{font-size:15px;font-weight:600}
+    #song-badges{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+    .badge{font-size:11px;padding:2px 8px;border-radius:100px;border:0.5px solid var(--border2);color:var(--text2);background:var(--bg2)}
+    #songsterr-link{font-size:11px;color:var(--blue);text-decoration:none;margin-left:auto;white-space:nowrap}
+    #songsterr-link:hover{text-decoration:underline}
+
+    /* ── Transport ── */
+    #controls-bar{
+      display:none;align-items:center;gap:12px;flex-wrap:wrap;
+      padding:10px 16px;border-bottom:0.5px solid var(--border);background:var(--bg2);
+    }
+    .ctrl-btn{
+      width:36px;height:36px;border-radius:50%;border:0.5px solid var(--border2);
+      background:var(--bg);color:var(--text);font-size:14px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;transition:background 0.1s;flex-shrink:0;
+    }
+    .ctrl-btn:hover{background:var(--bg3)}
+    #play-btn{width:40px;height:40px;font-size:15px}
+    .ctrl-group{display:flex;align-items:center;gap:8px}
+    .ctrl-label{font-size:12px;color:var(--text2);white-space:nowrap}
+    .ctrl-val{font-size:12px;font-weight:500;min-width:54px}
+    input[type=range]{-webkit-appearance:none;height:4px;border-radius:2px;background:var(--border2);outline:none;width:110px}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer}
+    select.ctrl-select{height:28px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);padding:0 6px;cursor:pointer;outline:none}
+    #time-display{margin-left:auto;font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+    /* ── Progress ── */
+    #progress-wrap{display:none;padding:0 16px;height:20px;align-items:center;cursor:pointer;background:var(--bg)}
+    #progress-track{width:100%;height:3px;background:var(--border);border-radius:2px;position:relative}
+    #progress-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:2px;width:0%;transition:width 0.08s linear}
+
+    /* ── Practice bar ── */
+    #practice-bar{
+      display:none;padding:10px 16px;gap:12px;align-items:center;flex-wrap:wrap;
+      background:var(--bg2);border-bottom:0.5px solid var(--border);
+    }
+    .prac-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);white-space:nowrap}
+    .prac-group{display:flex;align-items:center;gap:6px}
+    .prac-label{font-size:12px;color:var(--text2);white-space:nowrap}
+    input[type=number].bar-num{
+      width:52px;height:28px;padding:0 8px;font-size:13px;font-weight:500;
+      border:0.5px solid var(--border2);border-radius:var(--radius);
+      background:var(--bg);color:var(--text);text-align:center;outline:none;
+    }
+    input[type=number].bar-num:focus{border-color:var(--accent)}
+    #record-btn{
+      height:34px;padding:0 16px;border:none;border-radius:var(--radius);
+      background:var(--red);color:#fff;font-size:13px;font-weight:500;
+      cursor:pointer;display:flex;align-items:center;gap:7px;
+      transition:opacity 0.15s;white-space:nowrap;flex-shrink:0;
+    }
+    #record-btn:hover{opacity:0.86}
+    #record-btn:disabled{opacity:0.4;cursor:not-allowed}
+    .rec-dot{width:8px;height:8px;border-radius:50%;background:#fff}
+    #record-btn.recording .rec-dot{animation:blink 0.8s infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}
+    #mic-status{font-size:11px;color:var(--text3)}
+    #mic-status.ok{color:var(--green)}
+    #mic-status.err{color:var(--red)}
+
+    /* ── Recording strip ── */
+    #rec-strip{display:none;height:3px;background:repeating-linear-gradient(90deg,var(--red) 0%,var(--accent) 50%,var(--red) 100%);background-size:200% 100%;animation:slide 1.1s linear infinite}
+    #rec-strip.show{display:block}
+    @keyframes slide{to{background-position:-200% 0}}
+
+    /* ── Pitch meter ── */
+    #pitch-meter{display:none;padding:5px 16px;background:var(--bg2);border-bottom:0.5px solid var(--border);align-items:center;gap:10px}
+    #pitch-meter.show{display:flex}
+    .m-label{font-size:11px;color:var(--text3)}
+    #det-note{font-family:var(--mono);font-size:14px;font-weight:600;min-width:34px}
+    #det-note.on{color:var(--green)}
+    #det-freq{font-size:11px;color:var(--text3);min-width:65px}
+    #conf-wrap{flex:1;max-width:100px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+    #conf-fill{height:100%;border-radius:2px;background:var(--green);width:0%;transition:width 0.1s}
+
+    /* ── Countdown ── */
+    #countdown-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.58);align-items:center;justify-content:center;flex-direction:column;gap:10px}
+    #countdown-overlay.show{display:flex}
+    #countdown-num{font-size:130px;font-weight:700;color:#fff;line-height:1;animation:popIn 0.22s ease}
+    #countdown-sub{font-size:18px;color:rgba(255,255,255,0.7)}
+    @keyframes popIn{from{transform:scale(1.45);opacity:0}to{transform:scale(1);opacity:1}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── States ── */
+    #state-area{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
+    .state-box{text-align:center;max-width:400px}
+    .state-icon{font-size:40px;margin-bottom:14px}
+    .state-title{font-size:16px;font-weight:600;margin-bottom:6px}
+    .state-sub{font-size:13px;color:var(--text2);line-height:1.6}
+    #gen-spinner{width:36px;height:36px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.75s linear infinite;margin:0 auto 14px}
+    .error-msg{margin:12px 16px;padding:10px 14px;border:0.5px solid rgba(214,48,48,0.3);border-radius:var(--radius);background:var(--red-dim);font-size:13px;color:var(--text2);display:none}
+
+    /* ── Tab area ── */
+    #tab-area{flex:1;overflow-x:auto;padding:20px 16px 0;display:none}
+    #tab-notes-banner{display:none;font-size:12px;color:var(--text2);margin-bottom:16px;padding:8px 12px;background:var(--bg2);border-radius:var(--radius);border:0.5px solid var(--border)}
+    #tab-scroll{display:flex;flex-direction:column;gap:36px}
+
+    /* ── Tab rows ── */
+    .tab-row{display:flex;flex-direction:column}
+    .section-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);margin-bottom:6px;padding-left:28px}
+    .measure-nums{display:flex;padding-left:26px;margin-bottom:2px}
+    .mnum{width:28px;font-size:10px;color:var(--text3)}
+    .string-line{display:flex;align-items:center}
+    .string-name{width:22px;text-align:right;font-size:11px;font-weight:600;color:var(--text2);font-family:var(--mono);margin-right:4px;flex-shrink:0}
+    .cells{display:flex}
+    .cell{width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-bottom:0.5px solid var(--border2);position:relative}
+    .cell.bar-start::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--border2)}
+    .cell .fret{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text);line-height:1;z-index:1}
+    .cell.in-range{background:var(--blue-dim)}
+    .cell.active{background:var(--accent-dim)}
+    .cell.active .fret{color:var(--accent)}
+    .cell.in-range.active{background:var(--accent-dim)}
+
+    /* ── Feedback ── */
+    #feedback-panel{display:none;margin:20px 16px 0;border-radius:var(--radius-lg);border:0.5px solid var(--border);overflow:hidden}
+    #feedback-panel.show{display:block}
+    #feedback-header{padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid var(--border);background:var(--bg2)}
+    #feedback-title{font-size:13px;font-weight:600}
+    #feedback-attempt{font-size:11px;color:var(--text3);margin-left:auto}
+    #feedback-body{padding:14px}
+    #feedback-text{font-size:14px;line-height:1.75;color:var(--text)}
+    #feedback-thinking{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)}
+    #f-spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+    #score-row{display:flex;gap:20px;margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);flex-wrap:wrap}
+    .sc-item{display:flex;flex-direction:column;gap:3px}
+    .sc-label{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+    .sc-bar-row{display:flex;align-items:center;gap:6px}
+    .sc-bg{width:80px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+    .sc-fill{height:100%;border-radius:3px;transition:width 0.65s ease;width:0%}
+    .sc-val{font-size:11px;font-weight:600}
+    #try-again-btn{margin-top:12px;height:32px;padding:0 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer;display:none;align-items:center;gap:6px}
+    #try-again-btn:hover{background:var(--bg3)}
+    .nav-btn{height:36px;padding:0 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .nav-btn:hover{background:var(--bg3)}
+    #gp-upload{display:none}
+    .mode-btn{height:36px;padding:0 12px;border:none;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;transition:background 0.15s}
+    .mode-btn.active{background:var(--accent);color:#fff}
+    .mode-btn:hover:not(.active){background:var(--bg3)}
+
+    #spacer{height:40px}
+    #footer{padding:10px 16px;border-top:0.5px solid var(--border);font-size:11px;color:var(--text3);text-align:center;background:var(--bg2);margin-top:auto}
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <div id="logo">string<span>r</span></div>
+    <div id="search-wrap">
+      <button onclick="loadSample()" class="nav-btn">Try sample</button>
+      <label for="gp-upload" class="nav-btn">Upload GP</label>
+      <input type="file" id="gp-upload" accept=".gp,.gp5,.gpx,.xml,.musicxml" />
+      <input id="search-input" placeholder="Search song or artist… e.g. aint talkin, metallica, wonderwall" autocomplete="off" spellcheck="false"/>
+      <button id="search-clear" title="Clear">✕</button>
+      <div id="search-dropdown"></div>
+    </div>
+
+    <div id="audio-mode-wrap" style="display:none;align-items:center;gap:0;border:0.5px solid var(--border2);border-radius:var(--radius);overflow:hidden;flex-shrink:0">
+      <button id="mode-synth" onclick="setAudioMode('synth')" class="mode-btn active">🎸 Synth</button>
+      <button id="mode-original" onclick="setAudioMode('original')" class="mode-btn">▶ Original</button>
+    </div>
+    <div id="yt-offset-wrap" style="display:none;align-items:center;gap:6px;flex-shrink:0">
+      <button onclick="markStart()" id="btn-mark-start"
+        style="height:28px;padding:0 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:11px;cursor:pointer"
+        title="Click this exactly when you hear the first note">📍 Sync</button>
+      <span id="yt-sync-status" style="font-size:10px;color:var(--text2)">Click Sync when first note plays</span>
+    </div>
+
+  </header>
+
+  <div id="song-meta">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <div id="song-title"></div>
+      <a id="songsterr-link" href="#" target="_blank">View on Songsterr ↗</a>
+    </div>
+    <div id="song-badges"></div>
+  </div>
+
+  <div id="controls-bar">
+    <button class="ctrl-btn" id="restart-btn" title="Restart">&#9198;</button>
+    <button class="ctrl-btn" id="play-btn"    title="Play / Pause">&#9654;</button>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Tempo</span>
+      <input type="range" id="bpm-slider" min="40" max="220" value="120" step="1"/>
+      <span class="ctrl-val" id="bpm-val">120 BPM</span>
+      <button onclick="tapTempo()" title="Tap to set BPM"
+        style="height:26px;padding:0 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">Tap</button>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Speed</span>
+      <select id="speed-select" class="ctrl-select">
+        <option value="0.5">½×</option>
+        <option value="0.75">¾×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.5">1½×</option>
+        <option value="2">2×</option>
+      </select>
+    </div>
+    <span id="time-display">0:00 / 0:00</span>
+  </div>
+
+  <div id="progress-wrap">
+    <div id="progress-track"><div id="progress-fill"></div></div>
+  </div>
+
+  <div id="practice-bar">
+    <span class="prac-title">🎯 Practice</span>
+    <div class="prac-group">
+      <span class="prac-label">Bars</span>
+      <input type="number" class="bar-num" id="bar-start" min="1" value="1"/>
+      <span class="prac-label">to</span>
+      <input type="number" class="bar-num" id="bar-end"   min="1" value="2"/>
+    </div>
+    <div class="prac-group">
+      <span class="prac-label">Loop</span>
+      <input type="checkbox" id="loop-toggle" checked style="cursor:pointer;accent-color:var(--accent);width:14px;height:14px"/>
+    </div>
+    <button id="record-btn" disabled>
+      <span class="rec-dot"></span>
+      <span id="rec-label">Record &amp; Play</span>
+    </button>
+    <span id="mic-status">Mic: waiting…</span>
+  </div>
+
+  <div id="rec-strip"></div>
+
+  <div id="pitch-meter">
+    <span class="m-label">Hearing:</span>
+    <span id="det-note">—</span>
+    <span id="det-freq">— Hz</span>
+    <span class="m-label">Signal</span>
+    <div id="conf-wrap"><div id="conf-fill"></div></div>
+  </div>
+
+  <div id="state-area">
+    <div class="state-box" id="empty-box">
+      <div class="state-icon">🎸</div>
+      <div class="state-title">Search for any song</div>
+      <div class="state-sub">Start typing a song name or artist above.<br>
+        Results appear instantly from Songsterr's library of 800,000+ tabs.</div>
+    </div>
+    <div class="state-box" id="loading-box" style="display:none">
+      <div id="gen-spinner"></div>
+      <div class="state-title">Loading tab from Songsterr…</div>
+      <div class="state-sub">Fetching real tab data — this is usually instant.</div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="error-box"></div>
+
+  <div id="yt-player-wrap" style="display:none;margin:0 16px 8px;border-radius:var(--radius-lg);overflow:hidden;background:#000">
+    <div id="yt-player"></div>
+  </div>
+  <div id="tab-area">
+    <div id="tab-notes-banner"></div>
+    <div id="tab-scroll"></div>
+  </div>
+
+  <div id="feedback-panel">
+    <div id="feedback-header">
+      <span>🎓</span>
+      <div id="feedback-title">Coach Feedback</div>
+      <div id="feedback-attempt">Attempt #1</div>
+    </div>
+    <div id="feedback-body">
+      <div id="feedback-thinking" style="display:none"><div id="f-spinner"></div><span>Analyzing your playing…</span></div>
+      <div id="feedback-text"></div>
+      <div id="score-row" style="display:none">
+        <div class="sc-item"><span class="sc-label">Timing</span>
+          <div class="sc-bar-row"><div class="sc-bg"><div class="sc-fill" id="sc-timing" style="background:var(--green)"></div></div><span class="sc-val" id="sc-timing-v">—</span></div></div>
+        <div class="sc-item"><span class="sc-label">Notes</span>
+          <div class="sc-bar-row"><div class="sc-bg"><div class="sc-fill" id="sc-notes" style="background:var(--blue)"></div></div><span class="sc-val" id="sc-notes-v">—</span></div></div>
+        <div class="sc-item"><span class="sc-label">Overall</span>
+          <div class="sc-bar-row"><div class="sc-bg"><div class="sc-fill" id="sc-overall" style="background:var(--accent)"></div></div><span class="sc-val" id="sc-overall-v">—</span></div></div>
+      </div>
+      <button id="try-again-btn" onclick="tryAgain()">↺ Try again</button>
+    </div>
+  </div>
+
+  <div id="spacer"></div>
+  <footer id="footer">Stringr · Real tabs from Songsterr · AI practice coach · For personal use only</footer>
+
+
+
+</div>
+
+<div id="countdown-overlay">
+  <div id="countdown-num">3</div>
+  <div id="countdown-sub">Get ready to play…</div>
+</div>
+
+<script>
+'use strict';
+const STRING_ORDER  = ['e','B','G','D','A','E'];
+const COLS_PER_MEAS = 8;
+const MEAS_PER_ROW  = 4;
+const OPEN_MIDI     = {e:64,B:59,G:55,D:50,A:45,E:40};
+const NOTE_NAMES    = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+let tabData=null, playing=false, currentCol=0, totalCols=0;
+let rafId=null, lastTs=null, bpm=120, speedMult=1.0;
+let micStream=null, audioCtx=null, analyserNode=null, pitchBuf=null;
+let pitchTimer=null, recording=false, recStartMs=0;
+let detectedNotes=[], attemptCount=0;
+let currentSongId=null;
+// Scheduler globals
+const STR_ORDER     = ['e','B','G','D','A','E'];
+let scheduleTimer   = null;
+let playStartAudio  = 0;
+let playStartCol    = 0;
+const LOOKAHEAD_MS  = 150;
+const SCHEDULE_INT  = 50;
+let eventTimeline   = [];
+let timelineIdx     = 0;
+let ytStartOffset   = 0;  // YouTube time at measure 1, beat 1
+let ytEndOffset     = 0;  // YouTube time at final measure (0 = not set, use BPM)
+let ytCalibrated    = false; // true when both anchors are set
+
+const $=id=>document.getElementById(id);
+
+// ── Search ────────────────────────────────────────────────────────────────────
+let searchTimer=null;
+$('search-input').addEventListener('input', e => {
+  const q = e.target.value.trim();
+  $('search-clear').style.display = q ? 'block' : 'none';
+  clearTimeout(searchTimer);
+  if (q.length < 2) { hideDropdown(); return; }
+  showDropdownLoading();
+//  searchTimer = setTimeout(() => doSearch(q), 300);
+  if (q.length < 4) { hideDropdown(); return; }
+  searchTimer = setTimeout(() => doSearch(q), 900);
+});
+
+$('search-input').addEventListener('keydown', e => {
+  const items = [...document.querySelectorAll('.dd-item')];
+  const active = document.querySelector('.dd-item.active');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const idx = active ? items.indexOf(active) : -1;
+    items.forEach(i => i.classList.remove('active'));
+    if (items[idx+1]) items[idx+1].classList.add('active');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const idx = active ? items.indexOf(active) : items.length;
+    items.forEach(i => i.classList.remove('active'));
+    if (items[idx-1]) items[idx-1].classList.add('active');
+  } else if (e.key === 'Enter') {
+    const act = document.querySelector('.dd-item.active');
+    if (act) act.click();
+  } else if (e.key === 'Escape') {
+    hideDropdown();
+  }
+});
+
+$('search-clear').addEventListener('click', () => {
+  $('search-input').value = '';
+  $('search-clear').style.display = 'none';
+  hideDropdown();
+  $('search-input').focus();
+});
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  if (!$('search-wrap').contains(e.target)) hideDropdown();
+});
+
+async function doSearch(q) {
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const results = await r.json();
+    if (results.length === 0) {
+      showDropdownEmpty();
+    } else {
+      showDropdownResults(results);
+    }
+  } catch(e) {
+    showDropdownEmpty('Search failed — check server');
+  }
+}
+
+function showDropdownLoading() {
+  const dd = $('search-dropdown');
+  dd.innerHTML = '<div class="dd-loading"><div class="dd-spinner"></div>Searching Songsterr…</div>';
+  dd.classList.add('show');
+}
+
+function showDropdownResults(results) {
+  const dd = $('search-dropdown');
+  dd.innerHTML = results.map(r =>
+    `<div class="dd-item" data-id="${r.songId}" data-title="${esc(r.title)}" data-artist="${esc(r.artist)}">
+      <span class="dd-title">${esc(r.title)}</span>
+      <span class="dd-artist">${esc(r.artist)}</span>
+    </div>`
+  ).join('');
+  dd.classList.add('show');
+  dd.querySelectorAll('.dd-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const id     = item.dataset.id;
+      const title  = item.dataset.title;
+      const artist = item.dataset.artist;
+      $('search-input').value = `${title} — ${artist}`;
+      $('search-clear').style.display = 'block';
+      hideDropdown();
+      loadTab(id, title, artist);
+    });
+  });
+}
+
+function showDropdownEmpty(msg = 'No results found') {
+  const dd = $('search-dropdown');
+  dd.innerHTML = `<div class="dd-empty">${msg}</div>`;
+  dd.classList.add('show');
+}
+
+function hideDropdown() {
+  $('search-dropdown').classList.remove('show');
+}
+
+// ── Tab load ──────────────────────────────────────────────────────────────────
+async function loadTab(songId, title, artist) {
+  stopPlayback(); showLoading();
+  $('error-box').style.display = 'none';
+  $('feedback-panel').classList.remove('show');
+  currentSongId = songId;
+
+  try {
+    const r = await fetch(`/api/tab/${songId}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed to load tab');
+
+    tabData = data;
+    bpm = data.bpm || 120;
+    $('bpm-slider').value = bpm;
+    $('bpm-val').textContent = bpm + ' BPM';
+
+    // Songsterr API doesn't expose tempo — warn user if we're using the fallback
+    if (data.bpmIsEstimate) {
+      const wb = $('error-box');
+      wb.textContent = '⚠ Tempo not available from Songsterr. Adjust the Tempo slider to match the song speed (e.g. Panama = 141 BPM).';
+      wb.style.cssText = 'display:block;background:#5a4a00;color:#ffd;border-radius:4px;padding:8px 12px;';
+      setTimeout(() => { wb.style.display='none'; wb.style.cssText=''; }, 9000);
+    }
+
+    // Auto-load YouTube if song has a video ID
+    if (data.youtubeId) {
+      $('audio-mode-wrap').style.display = 'flex';
+      if (ytReady) {
+        initYouTubePlayer(data.youtubeId).catch(()=>{});
+      } else {
+        window._pendingYtId = data.youtubeId;
+      }
+    } else {
+      $('audio-mode-wrap').style.display = 'none';
+      $('yt-player-wrap').style.display = 'none';
+    }
+    // Load ytStartOffset from server data or saved calibration
+    ytStartOffset = 0;
+    if (data.ytStartOffset > 0) ytStartOffset = data.ytStartOffset;
+    // Check if user previously calibrated this song
+    const savedOffset = localStorage.getItem('sync_' + songId);
+    if (savedOffset !== null) ytStartOffset = parseFloat(savedOffset);
+    // Always start in synth mode
+    audioMode = 'synth';
+    $('mode-synth').classList.add('active');
+    $('mode-original').classList.remove('active');
+    // Pre-init sampler as soon as a song loads
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      ksDestNode = null;
+    }
+    if (!samplerReady) initSampler();
+    renderMeta(data, songId);
+    renderTab(data);
+    showTab();
+    await initMic();
+    setupPracticeBars();
+
+  } catch(e) {
+    $('error-box').textContent = '⚠ ' + e.message;
+    $('error-box').style.display = 'block';
+    showEmpty();
+  }
+}
+
+function renderMeta(d, songId) {
+  $('song-title').textContent = d.title + (d.artist ? '  —  ' + d.artist : '');
+  $('songsterr-link').href = `https://www.songsterr.com/a/wsa/-tab-s${songId}`;
+  const badges = [d.tuning||'Standard (EADGBe)', d.timeSignature||'4/4',
+    d.bpm ? d.bpm+' BPM' : null, d.capo>0 ? 'Capo '+d.capo : null].filter(Boolean);
+  $('song-badges').innerHTML = badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('');
+  $('song-meta').style.display = 'block';
+  const nb = $('tab-notes-banner');
+  if (d.notes) { nb.textContent = '💡 ' + d.notes; nb.style.display = 'block'; }
+  else nb.style.display = 'none';
+}
+
+// ── Tab render ────────────────────────────────────────────────────────────────
+function renderTab(d) {
+  $('tab-scroll').innerHTML = '';
+  const measures = d.measures || [];
+  totalCols = measures.length * COLS_PER_MEAS; currentCol = 0;
+  for (let i=0;i<measures.length;i+=MEAS_PER_ROW)
+    $('tab-scroll').appendChild(buildRow(measures.slice(i,i+MEAS_PER_ROW), i));
+  updateTimeDsp(); refreshRangeStyle();
+}
+
+function buildRow(rowM, rowStart) {
+  const row = document.createElement('div'); row.className = 'tab-row';
+  const lbl = rowM.find(m=>m.label)?.label;
+  if (lbl) { const l=document.createElement('div');l.className='section-label';l.textContent=lbl;row.appendChild(l); }
+  const numRow = document.createElement('div'); numRow.className = 'measure-nums';
+  rowM.forEach(m=>{ for(let c=0;c<COLS_PER_MEAS;c++){const n=document.createElement('div');n.className='mnum';n.textContent=c===0?m.number:'';numRow.appendChild(n);} });
+  row.appendChild(numRow);
+  STRING_ORDER.forEach(str=>{
+    const line=document.createElement('div'); line.className='string-line';
+    const nm=document.createElement('div'); nm.className='string-name'; nm.textContent=str; line.appendChild(nm);
+    const cells=document.createElement('div'); cells.className='cells';
+    rowM.forEach((m,mi)=>{
+      const sd=(m.strings&&m.strings[str])||Array(COLS_PER_MEAS).fill('-');
+      sd.forEach((val,ci)=>{
+        const gc=(rowStart+mi)*COLS_PER_MEAS+ci;
+        const cell=document.createElement('div');
+        cell.className='cell'+(ci===0?' bar-start':''); cell.dataset.col=gc;
+        if(val&&val!=='-'){const f=document.createElement('span');f.className='fret';f.textContent=val;cell.appendChild(f);}
+        cells.appendChild(cell);
+      });
+    });
+    line.appendChild(cells); row.appendChild(line);
+  });
+  return row;
+}
+
+// ── Playback ──────────────────────────────────────────────────────────────────
+//function togglePlay(){ if(!tabData) return; playing?pausePlay():startPlay(); }
+
+function togglePlay() {
+  if (!tabData) return;
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    ksDestNode = null;
+    initSampler();  // kick off sample loading on first user gesture
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  playing ? pausePlay() : startPlay();
+}
+
+
+//function startPlay(fromCol){ if(fromCol!==undefined)currentCol=fromCol; playing=true; $('play-btn').innerHTML='&#9646;&#9646;'; lastTs=null; rafId=requestAnimationFrame(tick); }
+//function pausePlay(){ playing=false; $('play-btn').innerHTML='&#9654;'; if(rafId)cancelAnimationFrame(rafId); }
+//function stopPlayback(){ pausePlay(); currentCol=0; clearHL(); $('progress-fill').style.width='0%'; updateTimeDsp(); }
+
+function startPlay(fromCol) {
+  if (fromCol !== undefined) currentCol = fromCol;
+  playing = true;
+  $('play-btn').innerHTML = '&#9646;&#9646;';
+  lastTs = null;
+
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    ksDestNode = null;
+    if (typeof Tone !== 'undefined') {
+      Tone.setContext(audioCtx);
+      initSampler();
+    }
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // Build event timeline from current position
+  playStartCol   = currentCol;
+  playStartAudio = audioCtx.currentTime + 0.05; // tiny buffer for scheduling
+  eventTimeline  = buildTimeline(currentCol);
+  timelineIdx    = 0;
+
+  // Only run synth scheduler in synth mode
+  if (audioMode === 'synth') {
+    if (scheduleTimer) clearInterval(scheduleTimer);
+    scheduleTimer = setInterval(runScheduler, SCHEDULE_INT);
+    runScheduler(); // schedule first batch immediately
+  }
+
+  // Start YouTube in sync
+  if (ytPlayer && ytPlayer.playVideo) {
+    const secPerMeasure = (60 / bpm) * (tabData?.timeSignature ? parseInt(tabData.timeSignature) : 4);
+    const tabSec = (currentCol / COLS_PER_MEAS) * secPerMeasure;
+    ytPlayer.seekTo(ytStartOffset + tabSec, true);
+    ytPlayer.setPlaybackRate(speedMult);
+    ytPlayer.playVideo();
+    if (audioMode === 'original') ytPlayer.unMute();
+    else ytPlayer.mute();
+  }
+
+  rafId = requestAnimationFrame(tick);
+}
+
+function pausePlay() {
+  playing = false;
+  $('play-btn').innerHTML = '&#9654;';
+  if (rafId) cancelAnimationFrame(rafId);
+  if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null; }
+  if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+}
+
+function stopPlayback() {
+  pausePlay();
+  currentCol = 0; clearHL();
+  $('progress-fill').style.width = '0%';
+  updateTimeDsp();
+  if (ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(0, true);
+}
+
+
+
+
+
+
+
+
+
+
+
+function msPerCol(){ return 60/(bpm*(COLS_PER_MEAS/4)*speedMult)*1000; }
+
+// Tap tempo
+let tapTimes = [];
+function tapTempo() {
+  const now = Date.now();
+  tapTimes.push(now);
+  // Keep last 8 taps, reset if gap > 3s
+  tapTimes = tapTimes.filter(t => now - t < 3000).slice(-8);
+  if (tapTimes.length >= 2) {
+    const intervals = [];
+    for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
+    const avg = intervals.reduce((a,b)=>a+b,0) / intervals.length;
+    bpm = Math.round(60000 / avg);
+    $('bpm-slider').value = bpm;
+    $('bpm-val').textContent = bpm + ' BPM';
+  }
+}
+function tick(){
+  if(!playing) return;
+  const tsNum = tabData?.timeSignature ? parseInt(tabData.timeSignature) : 4;
+  const secPerMeasure = (60 / bpm) * tsNum;
+  let col;
+
+  if (audioMode === 'original' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+    const ytTime = ytPlayer.getCurrentTime() || 0;
+    const elapsed = ytTime - ytStartOffset;
+    col = Math.floor((elapsed / secPerMeasure) * COLS_PER_MEAS);
+    col = Math.max(0, Math.min(col, totalCols - 1));
+  } else if (audioCtx) {
+    const elapsed = (audioCtx.currentTime - playStartAudio) * speedMult;
+    col = Math.max(0, Math.min(playStartCol + Math.floor(elapsed / secPerMeasure * COLS_PER_MEAS), totalCols - 1));
+  } else {
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
+
+  if (col !== currentCol) {
+    currentCol = col;
+    highlightCol(currentCol);
+    if(recording){
+      if(currentCol>=parseInt($('bar-end').value)*COLS_PER_MEAS){finishRecording();return;}
+    } else if(currentCol>=totalCols-1){stopPlayback();return;}
+  }
+  rafId=requestAnimationFrame(tick);
+}
+
+
+function highlightCol(col) {
+  clearHL();
+  if (col < 0) return;
+  document.querySelectorAll(`.cell[data-col="${col}"]`).forEach(c => c.classList.add('active'));
+  const first = document.querySelector(`.cell[data-col="${col}"]`);
+  if (first) first.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+  if (totalCols>0) $('progress-fill').style.width=((col/totalCols)*100)+'%';
+  updateTimeDsp();
+}
+function clearHL(){ document.querySelectorAll('.cell.active').forEach(c=>c.classList.remove('active')); }
+
+// ── Range highlight ───────────────────────────────────────────────────────────
+function refreshRangeStyle(){
+  document.querySelectorAll('.cell.in-range').forEach(c=>c.classList.remove('in-range'));
+  if(!tabData)return;
+  const s=(parseInt($('bar-start').value)-1)*COLS_PER_MEAS;
+  const e=parseInt($('bar-end').value)*COLS_PER_MEAS;
+  for(let col=s;col<e;col++) document.querySelectorAll(`.cell[data-col="${col}"]`).forEach(c=>c.classList.add('in-range'));
+}
+function clampBars(){
+  const max=tabData?tabData.measures.length:99;
+  let s=Math.max(1,Math.min(+$('bar-start').value||1,max));
+  let e=Math.max(s,Math.min(+$('bar-end').value||s+1,max));
+  $('bar-start').value=s; $('bar-end').value=e;
+}
+function setupPracticeBars(){
+  if(!tabData)return;
+  const max=tabData.measures.length;
+  $('bar-start').max=max; $('bar-end').max=max;
+  $('bar-end').value=Math.min(2,max);
+  clampBars(); refreshRangeStyle();
+}
+$('bar-start').addEventListener('input',()=>{clampBars();refreshRangeStyle();});
+$('bar-end').addEventListener('input',()=>{clampBars();refreshRangeStyle();});
+
+// ── Microphone ────────────────────────────────────────────────────────────────
+async function initMic(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const src=audioCtx.createMediaStreamSource(micStream);
+    analyserNode=audioCtx.createAnalyser();
+    analyserNode.fftSize=4096; analyserNode.smoothingTimeConstant=0.45;
+    pitchBuf=new Float32Array(analyserNode.fftSize);
+    src.connect(analyserNode);
+    $('mic-status').textContent='Mic: ready ✓'; $('mic-status').className='ok';
+    $('record-btn').disabled=false;
+  }catch(err){
+    $('mic-status').textContent='Mic denied — allow microphone to use Practice Mode';
+    $('mic-status').className='err'; $('record-btn').disabled=true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PITCH DETECTION — McLeod Pitch Method (MPM)
+// ~2 cent accuracy vs ~20 cent for basic autocorrelation
+// ═══════════════════════════════════════════════════════════════════════
+function mcLeodPitch(buf, sr) {
+  const N = buf.length;
+  const half = Math.floor(N / 2);
+
+  // RMS check — reject silence
+  let rms = 0;
+  for (let i = 0; i < N; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / N);
+  if (rms < 0.012) return { freq: -1, clarity: 0 };
+
+  // Compute NSDF (Normalized Square Difference Function)
+  const nsdf = new Float32Array(half);
+  let sumSqL = 0, sumSqR = 0;
+  for (let i = 0; i < N; i++) { sumSqL += buf[i]*buf[i]; sumSqR += buf[i]*buf[i]; }
+
+  for (let lag = 0; lag < half; lag++) {
+    let acf = 0;
+    for (let i = 0; i < N - lag; i++) acf += buf[i] * buf[i + lag];
+    const denom = sumSqL + sumSqR;
+    nsdf[lag] = denom > 1e-10 ? 2 * acf / denom : 0;
+    sumSqL  -= buf[N - lag - 1] * buf[N - lag - 1];
+    sumSqR  -= buf[lag]         * buf[lag];
+  }
+
+  // Collect key maxima (local peaks above zero crossings)
+  const peaks = [];
+  let i = 0;
+  while (i < half - 1 && nsdf[i] > 0)  i++;
+  while (i < half - 1 && nsdf[i] <= 0) i++;
+  while (i < half - 1) {
+    if (nsdf[i] > nsdf[i-1] && nsdf[i] >= nsdf[i+1]) {
+      // Parabolic interpolation for sub-sample accuracy
+      const a = nsdf[i-1], b = nsdf[i], c = nsdf[i+1];
+      const denom2 = 2*(2*b - a - c);
+      const lagI = denom2 !== 0 ? i + (a-c)/denom2 : i;
+      const val  = denom2 !== 0 ? b + (a-c)*(a-c)/(8*(2*b-a-c)) : b;
+      peaks.push({ lag: lagI, val });
+    }
+    i++;
+    if (i < half - 1 && nsdf[i] < 0) {
+      while (i < half - 1 && nsdf[i] <= 0) i++;
+    }
+  }
+  if (!peaks.length) return { freq: -1, clarity: 0 };
+
+  const globalMax = Math.max(...peaks.map(p => p.val));
+  const thresh    = 0.8 * globalMax;
+  const chosen    = peaks.find(p => p.val >= thresh);
+  if (!chosen || chosen.lag <= 0) return { freq: -1, clarity: 0 };
+
+  return { freq: sr / chosen.lag, clarity: chosen.val };
+}
+
+function detectPitch() {
+  if (!analyserNode) return null;
+  analyserNode.getFloatTimeDomainData(pitchBuf);
+  const { freq, clarity } = mcLeodPitch(pitchBuf, audioCtx.sampleRate);
+  if (freq < 60 || freq > 1400) return null;
+  if (clarity < 0.82) return null;
+  return { freq, clarity };
+}
+
+function freqToMidi(f) { return Math.round(12 * Math.log2(f / 440) + 69); }
+function midiToName(m) { return NOTE_NAMES[((m%12)+12)%12] + Math.floor(m/12-1); }
+function centsDeviation(detectedFreq, expectedFreq) {
+  if (!expectedFreq || expectedFreq <= 0) return 0;
+  return Math.round(1200 * Math.log2(detectedFreq / expectedFreq));
+}
+function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONSET DETECTION — energy-spike method (~5ms resolution)
+// ═══════════════════════════════════════════════════════════════════════
+let _prevFrameEnergy = 0;
+const ONSET_RATIO    = 1.9;  // energy must jump by this factor
+const ONSET_MIN_RMS  = 0.015;
+const ONSET_MIN_GAP  = 60;   // ms — ignore onsets within 60ms of previous
+
+function detectOnset(buf) {
+  let e = 0;
+  for (let i = 0; i < buf.length; i++) e += buf[i] * buf[i];
+  e /= buf.length;
+  const isOnset = e > ONSET_MIN_RMS * ONSET_MIN_RMS && e > _prevFrameEnergy * ONSET_RATIO;
+  _prevFrameEnergy = e * 0.85 + _prevFrameEnergy * 0.15; // smoothed
+  return isOnset;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TECHNIQUE DETECTION from pitch contour
+// ═══════════════════════════════════════════════════════════════════════
+function detectTechnique(contour) {
+  // contour: [{relMs, freq}] sampled during note duration
+  if (contour.length < 3) return 'normal';
+  const first = contour[0].freq, last = contour[contour.length-1].freq;
+  const maxF  = Math.max(...contour.map(p => p.freq));
+  const minF  = Math.min(...contour.map(p => p.freq));
+  const semitoneRise = 12 * Math.log2(maxF / first);
+  const totalSpan    = 12 * Math.log2(maxF / minF);
+
+  // Vibrato: pitch oscillates ≥4 times
+  const mid = (first + last) / 2;
+  let crossings = 0;
+  for (let i = 1; i < contour.length; i++) {
+    if ((contour[i].freq - mid) * (contour[i-1].freq - mid) < 0) crossings++;
+  }
+  if (crossings >= 4 && totalSpan > 0.1 && totalSpan < 1.5) return 'vibrato';
+
+  // Bend: pitch rises steadily ≥ half a semitone
+  if (semitoneRise >= 0.5) {
+    const durationMs = contour[contour.length-1].relMs - contour[0].relMs;
+    if (durationMs < 120)  return 'fast-bend';
+    if (durationMs < 280)  return 'bend';
+    return 'slow-bend';
+  }
+
+  // Slide up/down: smooth glide
+  if (totalSpan >= 2.0) return last > first ? 'slide-up' : 'slide-down';
+
+  return 'normal';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXPECTED TIMELINE — precise ms timestamps from tab data
+// ═══════════════════════════════════════════════════════════════════════
+function buildExpectedTimeline(barStart, barEnd) {
+  const mpc = msPerCol();
+  const timeline = [];
+  const measures = (tabData?.measures || []).slice(barStart, barEnd);
+  measures.forEach((m, mi) => {
+    STRING_ORDER.forEach(str => {
+      const cells = (m.strings && m.strings[str]) || [];
+      cells.forEach((val, ci) => {
+        if (!val || val === '-') return;
+        const fret = parseInt(val);
+        const strIdx = STRING_ORDER.indexOf(str);
+        let openMidi = OPEN_MIDI[str];
+        if (tabData?.tuningMidi && strIdx >= 0) openMidi = tabData.tuningMidi[strIdx];
+        const midi = openMidi + fret;
+        const freq = midiToFreq(midi);
+        timeline.push({
+          timeMs:   Math.round((mi * COLS_PER_MEAS + ci) * mpc),
+          noteName: midiToName(midi),
+          midiNote: midi,
+          freq,
+          string:   str,
+          fret:     String(fret),
+          measure:  barStart + mi + 1,
+          beat:     ci + 1,
+        });
+      });
+    });
+  });
+  return timeline.sort((a, b) => a.timeMs - b.timeMs);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRACTICE / RECORD — rich note-event tracking
+// ═══════════════════════════════════════════════════════════════════════
+let _expectedTimeline = [];
+let _currentNoteEvent = null;  // note being tracked right now
+let _noteEvents       = [];    // finalised note events
+let _lastOnsetMs      = -999;
+
+async function startPractice() {
+  if (!tabData || !micStream) return;
+  clampBars();
+  $('record-btn').disabled = true; $('rec-label').textContent = 'Get ready…';
+  await countdown(3);
+
+  // Build expected timeline for this bar range
+  const barS = parseInt($('bar-start').value) - 1;
+  const barE = parseInt($('bar-end').value);
+  _expectedTimeline = buildExpectedTimeline(barS, barE);
+  _noteEvents       = [];
+  _currentNoteEvent = null;
+  _lastOnsetMs      = -999;
+  _prevFrameEnergy  = 0;
+
+  detectedNotes = []; // kept for backwards compat scoring
+  recording = true; recStartMs = performance.now(); attemptCount++;
+
+  $('feedback-panel').classList.remove('show');
+  $('record-btn').classList.add('recording'); $('rec-label').textContent = 'Recording…';
+  $('rec-strip').classList.add('show'); $('pitch-meter').classList.add('show');
+
+  pitchTimer = setInterval(() => {
+    if (!analyserNode) return;
+    analyserNode.getFloatTimeDomainData(pitchBuf);
+    const nowMs  = Math.round(performance.now() - recStartMs);
+    const onset  = detectOnset(pitchBuf);
+    const result = detectPitch();
+
+    if (result) {
+      const { freq, clarity } = result;
+      const nn   = midiToName(freqToMidi(freq));
+      const midi = freqToMidi(freq);
+
+      // Update pitch meter UI
+      $('det-note').textContent = nn; $('det-note').className = 'on';
+      $('det-freq').textContent = freq.toFixed(1) + ' Hz';
+      $('conf-fill').style.width = (clarity * 100) + '%';
+
+      // Keep legacy array for score calc
+      detectedNotes.push({ timeMs: nowMs, noteName: nn, midiNote: midi,
+        frequency: Math.round(freq*10)/10, clarity });
+
+      if (onset && (nowMs - _lastOnsetMs) > ONSET_MIN_GAP) {
+        // ── New note onset ───────────────────────────────────────────
+        _lastOnsetMs = nowMs;
+        if (_currentNoteEvent) _finalizeNoteEvent(nowMs);
+
+        // Match against expected timeline (±400ms window)
+        const expected = _expectedTimeline.find(e =>
+          Math.abs(e.timeMs - nowMs) < 400 &&
+          !_noteEvents.some(ne => ne.expectedTimeMs === e.timeMs)
+        );
+
+        _currentNoteEvent = {
+          onsetMs:       nowMs,
+          expectedTimeMs: expected?.timeMs ?? null,
+          timingOffsetMs: expected ? nowMs - expected.timeMs : null,
+          detectedNote:  nn,
+          detectedMidi:  midi,
+          detectedFreq:  freq,
+          expectedNote:  expected?.noteName ?? null,
+          expectedFreq:  expected?.freq     ?? null,
+          centsDeviation: expected ? centsDeviation(freq, expected.freq) : 0,
+          string:        expected?.string ?? null,
+          fret:          expected?.fret   ?? null,
+          measure:       expected?.measure ?? null,
+          beat:          expected?.beat   ?? null,
+          pitchContour:  [{ relMs: 0, freq }],
+        };
+      } else if (_currentNoteEvent) {
+        // ── Continue tracking current note ────────────────────────────
+        const relMs = nowMs - _currentNoteEvent.onsetMs;
+        _currentNoteEvent.pitchContour.push({ relMs, freq });
+        // Update live cents (use most recent freq)
+        if (_currentNoteEvent.expectedFreq) {
+          _currentNoteEvent.centsDeviation =
+            centsDeviation(freq, _currentNoteEvent.expectedFreq);
+        }
+      }
+    } else {
+      // Silence — finalize note if it was playing long enough
+      if (_currentNoteEvent && (performance.now() - recStartMs - _currentNoteEvent.onsetMs) > 80) {
+        _finalizeNoteEvent(nowMs);
+        _currentNoteEvent = null;
+      }
+      $('det-note').textContent = '—'; $('det-note').className = '';
+      $('det-freq').textContent = '— Hz'; $('conf-fill').style.width = '0%';
+    }
+  }, 20); // 20ms = 50fps — much faster than old 80ms
+
+  pausePlay();
+  startPlay((parseInt($('bar-start').value) - 1) * COLS_PER_MEAS);
+}
+
+function _finalizeNoteEvent(endMs) {
+  if (!_currentNoteEvent) return;
+  const ev = _currentNoteEvent;
+  ev.durationMs      = endMs - ev.onsetMs;
+  ev.detectedTechnique = detectTechnique(ev.pitchContour);
+  // Average cents deviation over contour
+  if (ev.pitchContour.length > 1 && ev.expectedFreq) {
+    const avgFreq = ev.pitchContour.reduce((s,p)=>s+p.freq,0) / ev.pitchContour.length;
+    ev.centsDeviation = centsDeviation(avgFreq, ev.expectedFreq);
+  }
+  delete ev.pitchContour; // don't bloat the payload
+  _noteEvents.push(ev);
+  _currentNoteEvent = null;
+}
+
+function finishRecording() {
+  pausePlay(); recording = false;
+  if (_currentNoteEvent) _finalizeNoteEvent(Math.round(performance.now() - recStartMs));
+  clearInterval(pitchTimer); pitchTimer = null;
+  $('record-btn').classList.remove('recording'); $('rec-label').textContent = 'Record & Play';
+  $('record-btn').disabled = false;
+  $('rec-strip').classList.remove('show'); $('pitch-meter').classList.remove('show');
+  if ($('loop-toggle').checked) setTimeout(startPractice, 700);
+  analyzeAndFeedback();
+}
+
+function tryAgain() { $('feedback-panel').classList.remove('show'); startPractice(); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ANALYZE & FEEDBACK — sends rich note events to the LLM
+// ═══════════════════════════════════════════════════════════════════════
+async function analyzeAndFeedback() {
+  $('feedback-attempt').textContent = 'Attempt #' + attemptCount;
+  $('feedback-text').textContent = '';
+  $('score-row').style.display = 'none';
+  $('try-again-btn').style.display = 'none';
+  $('feedback-thinking').style.display = 'flex';
+  $('feedback-panel').classList.add('show');
+  $('feedback-panel').scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  const barS   = parseInt($('bar-start').value) - 1;
+  const barE   = parseInt($('bar-end').value);
+  const mpc    = msPerCol();
+  const totalMs = ((barE - barS) * COLS_PER_MEAS) * mpc;
+
+  // Score computation using expected timeline
+  const expCount   = _expectedTimeline.length || 1;
+  const hitWindow  = mpc * 0.65; // timing tolerance
+  let   timingHits = 0, noteHits = 0;
+
+  _noteEvents.forEach(ev => {
+    if (ev.expectedNote && ev.detectedNote === ev.expectedNote) noteHits++;
+    if (ev.timingOffsetMs !== null && Math.abs(ev.timingOffsetMs) < hitWindow) timingHits++;
+  });
+
+  // Add missed notes (expected notes with no matching detected event)
+  const missedNotes = _expectedTimeline
+    .filter(e => !_noteEvents.some(ne => ne.expectedTimeMs === e.timeMs))
+    .map(e => ({ timeMs: e.timeMs, noteName: e.noteName, string: e.string,
+                 fret: e.fret, measure: e.measure, beat: e.beat, missed: true }));
+
+  // Timing stats
+  const timedEvents  = _noteEvents.filter(e => e.timingOffsetMs !== null);
+  const avgOffset    = timedEvents.length
+    ? Math.round(timedEvents.reduce((s,e)=>s+e.timingOffsetMs,0) / timedEvents.length)
+    : 0;
+  const tendencyStr  = avgOffset > 15 ? 'rushing (playing ahead of the beat)'
+                      : avgOffset < -15 ? 'dragging (playing behind the beat)'
+                      : 'good timing overall';
+
+  // Technique summary
+  const techniques = [...new Set(_noteEvents.map(e=>e.detectedTechnique).filter(Boolean))];
+
+  try {
+    const res = await fetch('/api/analyze-playing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        songTitle:      tabData.title,
+        artist:         tabData.artist,
+        bpm,
+        barRange:       [parseInt($('bar-start').value), parseInt($('bar-end').value)],
+        noteEvents:     _noteEvents,      // rich per-note data
+        missedNotes,                       // notes not played at all
+        expectedTimeline: _expectedTimeline,
+        totalDurationMs:  Math.round(totalMs),
+        avgTimingOffsetMs: avgOffset,
+        timingTendency:    tendencyStr,
+        detectedTechniques: techniques,
+        // legacy fields for scoring
+        expectedNotes:  _expectedTimeline,
+        detectedNotes,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Analysis failed');
+
+    $('feedback-thinking').style.display = 'none';
+    $('feedback-text').textContent = data.feedback || 'No feedback returned.';
+
+    const noteScore   = Math.min(100, Math.round((noteHits / expCount) * 100));
+    const timingScore = timedEvents.length
+      ? Math.min(100, Math.round((timingHits / timedEvents.length) * 100)) : 0;
+    const overall     = Math.round(noteScore * 0.55 + timingScore * 0.45);
+
+    $('sc-timing').style.width = timingScore+'%'; $('sc-timing-v').textContent = timingScore+'%';
+    $('sc-notes').style.width  = noteScore+'%';   $('sc-notes-v').textContent  = noteScore+'%';
+    $('sc-overall').style.width= overall+'%';     $('sc-overall-v').textContent= overall+'%';
+    $('score-row').style.display = 'flex';
+    $('try-again-btn').style.display = 'inline-flex';
+  } catch(err) {
+    $('feedback-thinking').style.display = 'none';
+    $('feedback-text').textContent = '⚠ Could not get feedback: ' + err.message;
+    $('try-again-btn').style.display = 'inline-flex';
+  }
+}
+
+// ── Countdown ─────────────────────────────────────────────────────────────────
+function countdown(n){
+  return new Promise(resolve=>{
+    const overlay=$('countdown-overlay'); overlay.classList.add('show');
+    let i=n;
+    function step(){
+      if(i>0){
+        $('countdown-num').textContent=i; $('countdown-sub').textContent=i===1?'Last chance…':'Get ready to play…';
+        $('countdown-num').style.animation='none'; void $('countdown-num').offsetWidth; $('countdown-num').style.animation='';
+        i--; setTimeout(step,850);
+      }else{
+        $('countdown-num').textContent='GO!'; $('countdown-sub').textContent='🎸 Play now!';
+        setTimeout(()=>{overlay.classList.remove('show');resolve();},650);
+      }
+    }
+    step();
+  });
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────────
+$('play-btn').addEventListener('click', togglePlay);
+$('restart-btn').addEventListener('click', ()=>stopPlayback());
+$('bpm-slider').addEventListener('input', e=>{ bpm=+e.target.value; $('bpm-val').textContent=bpm+' BPM'; updateTimeDsp(); });
+$('speed-select').addEventListener('change', e=>{ speedMult=+e.target.value; updateTimeDsp(); });
+$('record-btn').addEventListener('click', startPractice);
+$('progress-wrap').addEventListener('click', e=>{
+  if(!totalCols)return;
+  const rect=$('progress-track').getBoundingClientRect();
+  currentCol=Math.floor(Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*totalCols);
+  highlightCol(currentCol);
+});
+
+function updateTimeDsp(){
+  if(!totalCols){$('time-display').textContent='0:00 / 0:00';return;}
+  const spc=msPerCol()/1000;
+  $('time-display').textContent=`${fmtT(currentCol*spc)} / ${fmtT(totalCols*spc)}`;
+}
+function fmtT(s){return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function showLoading(){
+  $('state-area').style.display='flex'; $('empty-box').style.display='none';
+  $('loading-box').style.display='block'; $('tab-area').style.display='none';
+  $('controls-bar').style.display='none'; $('progress-wrap').style.display='none';
+  $('practice-bar').style.display='none'; $('song-meta').style.display='none';
+  $('feedback-panel').classList.remove('show');
+}
+function showEmpty(){
+  $('state-area').style.display='flex'; $('empty-box').style.display='block';
+  $('loading-box').style.display='none'; $('tab-area').style.display='none';
+  $('controls-bar').style.display='none'; $('progress-wrap').style.display='none';
+  $('practice-bar').style.display='none';
+}
+function showTab(){
+  $('state-area').style.display='none'; $('tab-area').style.display='block';
+  $('controls-bar').style.display='flex'; $('progress-wrap').style.display='flex';
+  $('practice-bar').style.display='flex'; $('error-box').style.display='none';
+}
+
+// Preload sampler as early as possible
+window.addEventListener('DOMContentLoaded', () => {
+  // Don't create AudioContext on load (needs user gesture on some browsers)
+  // Instead check if WebAudioFont loaded and init when first note plays
+  if (typeof WebAudioFontPlayer !== 'undefined') {
+    console.log('[waf] WebAudioFontPlayer available');
+  }
+});
+
+async function loadLocalTab(filename) {
+  stopPlayback();
+  showLoading();
+  $('error-box').style.display = 'none';
+  try {
+    const data = await fetch('/api/tab/local/' + filename).then(r => {
+      if (!r.ok) throw new Error('Local tab not found');
+      return r.json();
+    });
+    tabData = data;
+    bpm = data.bpm || 120;
+    $('bpm-slider').value = bpm;
+    $('bpm-val').textContent = bpm + ' BPM';
+    renderMeta(data, data.songId || 'local');
+    renderTab(data);
+    showTab();
+    await initMic();
+    setupPracticeBars();
+  } catch(e) {
+    $('error-box').textContent = '⚠ ' + e.message;
+    $('error-box').style.display = 'block';
+    showEmpty();
+  }
+}
+
+async function loadSample() {
+  stopPlayback();
+  showLoading();
+  $('search-input').value = 'Blues Rock Riff — Sample';
+  $('search-clear').style.display = 'block';
+  hideDropdown();
+  try {
+    const r    = await fetch('/api/sample');
+    const data = await r.json();
+    tabData = data;
+    bpm = data.bpm || 90;
+    $('bpm-slider').value = bpm;
+    $('bpm-val').textContent = bpm + ' BPM';
+    renderMeta(data, 'sample');
+    renderTab(data);
+    showTab();
+    await initMic();
+    setupPracticeBars();
+  } catch(e) {
+    $('error-box').textContent = '⚠ ' + e.message;
+    $('error-box').style.display = 'block';
+    showEmpty();
+  }
+}
+
+
+
+
+// ── Synthesizer ───────────────────────────────────────────────────────────────
+// Open-string frequencies for standard tuning
+const OPEN_FREQ = { e:329.63, B:246.94, G:196.00, D:146.83, A:110.00, E:82.41 };
+
+// Schedule a single guitar note at a precise Web Audio time
+// ── Guitar sampler (Tone.js + Magenta soundfonts) ────────────────────────────
+let guitarSampler = null;
+let samplerReady  = false;
+let ksDestNode    = null;
+
+function midiToNoteName(midi) {
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const oct = Math.floor(midi / 12) - 1;
+  return names[midi % 12] + oct;
+}
+
+function toMidi(str, fret) {
+  return OPEN_MIDI[str] + parseInt(fret);
+}
+
+async function initSampler() {
+  if (samplerReady || guitarSampler) return;
+  if (!audioCtx) return;
+  try {
+    if (typeof Soundfont === 'undefined') {
+      console.warn('[sampler] Soundfont library not loaded yet, retrying...');
+      setTimeout(initSampler, 500);
+      return;
+    }
+    console.log('[sampler] Loading electric guitar samples...');
+    guitarSampler = await Soundfont.instrument(audioCtx, 'electric_guitar_clean', {
+      soundfont: 'FluidR3_GM',
+      gain: 3.5,
+    });
+    samplerReady = true;
+    console.log('[sampler] ✓ Electric guitar ready!');
+    const s = document.createElement('div');
+    s.textContent = '🎸 Guitar samples ready ✓';
+    s.style.cssText = 'position:fixed;bottom:8px;right:8px;background:#1a3a1a;color:#4caf50;padding:6px 10px;border-radius:4px;font-size:11px;z-index:999;pointer-events:none';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 4000);
+  } catch(e) {
+    console.warn('[sampler] Failed to load samples:', e.message, '— using synthesis fallback');
+    guitarSampler = null;
+  }
+}
+
+function scheduleNote(str, fretVal, atTime) {
+  if (fretVal === '-') return;
+  const fret = parseInt(fretVal);
+  if (isNaN(fret)) return;
+
+  // Resolve MIDI note using actual tuning
+  const strIdx = STR_ORDER.indexOf(str);
+  let openMidi = OPEN_MIDI[str];
+  if (tabData?.tuningMidi && strIdx >= 0) openMidi = tabData.tuningMidi[strIdx];
+  const midi = openMidi + fret;
+
+  // soundfont-player (best quality)
+  if (samplerReady && guitarSampler) {
+    try {
+      const delay = Math.max(0, atTime - audioCtx.currentTime);
+      const dur   = Math.min(1.8, 0.5 + fret * 0.015);
+      guitarSampler.play(midi, audioCtx.currentTime + delay, { duration: dur, gain: 2.5 });
+      return;
+    } catch(e) { /* fall through to KS */ }
+  }
+
+  // Karplus-Strong string synthesis (guitar-quality fallback)
+  if (!audioCtx) return;
+  const freq   = 440 * Math.pow(2, (midi - 69) / 12);
+  const sr     = audioCtx.sampleRate;
+  const period = Math.max(2, Math.round(sr / freq));
+  const dur    = Math.min(2.5, 0.8 + (88 - midi) * 0.015);
+
+  // Fill wavetable with filtered noise (pluck excitation)
+  const N    = period;
+  const buf  = audioCtx.createBuffer(1, N, sr);
+  const data = buf.getChannelData(0);
+  // Bandlimited noise for more string-like pluck
+  for (let i = 0; i < N; i++) {
+    data[i] = (Math.random() + Math.random() + Math.random() - 1.5) * 0.67;
+  }
+
+  const ks = audioCtx.createBufferSource();
+  ks.buffer = buf;
+  ks.loop   = true;
+
+  // String lowpass (KS averaging filter simulated via biquad)
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  // Higher strings are brighter
+  lp.frequency.value = Math.min(freq * (midi > 60 ? 18 : 12), sr * 0.45);
+  lp.Q.value = 0.3;
+
+  // Body resonance peaks (guitar body frequencies)
+  const body = audioCtx.createBiquadFilter();
+  body.type = 'peaking';
+  body.frequency.value = 200;
+  body.gain.value = 3;
+  body.Q.value = 0.8;
+
+  // Distortion for electric guitar crunch
+  const dist = audioCtx.createWaveShaper();
+  const dAmt = 80;
+  const dCurve = new Float32Array(512);
+  for (let i = 0; i < 512; i++) {
+    const x = (i * 2) / 512 - 1;
+    dCurve[i] = ((Math.PI + dAmt) * x) / (Math.PI + dAmt * Math.abs(x));
+  }
+  dist.curve = dCurve;
+
+  // Amplitude envelope
+  const env = audioCtx.createGain();
+  const vol = 0.6;
+  env.gain.setValueAtTime(0, atTime);
+  env.gain.linearRampToValueAtTime(vol, atTime + 0.002);
+  env.gain.setTargetAtTime(0.001, atTime + 0.04, dur * 0.28);
+
+  ks.connect(lp);
+  lp.connect(body);
+  body.connect(dist);
+  dist.connect(env);
+  env.connect(audioCtx.destination);
+
+  ks.start(atTime);
+  ks.stop(atTime + dur + 0.1);
+}
+
+// Legacy single-note play (used by recording/practice highlight)
+function playNote(str, fret) {
+  if (!audioCtx) return;
+  scheduleNote(str, String(fret), audioCtx.currentTime);
+}
+
+// Look-ahead note scheduler
+function runScheduler() {
+  if (!playing || !audioCtx) return;
+  const elapsed     = audioCtx.currentTime - playStartAudio;
+  const scheduleEnd = elapsed + LOOKAHEAD_MS / 1000;
+  while (timelineIdx < eventTimeline.length) {
+    const ev = eventTimeline[timelineIdx];
+    const evSec = ev.sec / speedMult;
+    if (evSec > scheduleEnd) break;
+    scheduleNote(ev.str, ev.fret, playStartAudio + evSec);
+    timelineIdx++;
+  }
+}
+
+// Build full event timeline from tabData
+function buildTimeline(startCol) {
+  if (!tabData) return [];
+  const secPerBeat  = 60 / bpm;             // seconds per quarter note
+  const secPerMeasure = secPerBeat * (tabData.timeSignature ? parseInt(tabData.timeSignature) : 4);
+  const timeline = [];
+
+  tabData.measures.forEach((measure, mi) => {
+    const measureStartSec = mi * secPerMeasure;
+    const measureCol      = mi * COLS_PER_MEAS;
+
+    // Use raw events if available (precise timing), else fall back to grid
+    if (measure.events && measure.events.length > 0) {
+      measure.events.forEach(ev => {
+        const noteSec = measureStartSec + ev.measurePos * secPerMeasure;
+        const noteCol = measureCol + Math.round(ev.measurePos * COLS_PER_MEAS);
+        const str     = STR_ORDER[ev.strIdx];
+        if (str) timeline.push({ sec: noteSec, str, fret: ev.fret, col: Math.min(noteCol, measureCol + COLS_PER_MEAS - 1) });
+      });
+    } else {
+      // Fallback: grid-based (sample tab, uploaded GPX)
+      STR_ORDER.forEach(str => {
+        const cells = measure.strings?.[str] || [];
+        cells.forEach((fret, ci) => {
+          if (fret === '-') return;
+          const noteSec = measureStartSec + (ci / COLS_PER_MEAS) * secPerMeasure;
+          timeline.push({ sec: noteSec, str, fret, col: measureCol + ci });
+        });
+      });
+    }
+  });
+
+  // Filter to startCol, deduplicate same-string notes within 5ms, sort
+  const startSec = (startCol / COLS_PER_MEAS) * secPerMeasure;
+  const filtered = timeline
+    .filter(e => e.col >= startCol)
+    .sort((a, b) => a.sec - b.sec);
+
+  // Deduplicate: drop notes on same string within 5ms of each other
+  const deduped = [];
+  const lastStrTime = {};
+  for (const ev of filtered) {
+    const key = ev.str;
+    if (lastStrTime[key] !== undefined && (ev.sec - lastStrTime[key]) < 0.005) continue;
+    lastStrTime[key] = ev.sec;
+    deduped.push(ev);
+  }
+
+  return deduped.map(e => ({ ...e, sec: e.sec - startSec }));
+}
+
+
+
+
+
+// ── YouTube player ────────────────────────────────────────────────────────────
+let ytPlayer     = null;
+let ytReady      = false;
+let ytSyncTimer  = null;
+let audioMode    = 'synth'; // 'synth' or 'original'
+
+function markStart() {
+  if (!ytPlayer || !ytPlayer.getCurrentTime) return;
+  ytStartOffset = ytPlayer.getCurrentTime();
+  // Save for next time
+  if (currentSongId) localStorage.setItem('sync_' + currentSongId, ytStartOffset);
+  $('btn-mark-start').textContent = '✓ Synced';
+  $('btn-mark-start').style.color = '#4caf50';
+  $('yt-sync-status').textContent = 'Synced at ' + ytStartOffset.toFixed(2) + 's — saved!';
+  if (playing) {
+    const tsNum = tabData?.timeSignature ? parseInt(tabData.timeSignature) : 4;
+    const secPerMeasure = (60 / bpm) * tsNum;
+    currentCol = Math.max(0, Math.floor(
+      ((ytPlayer.getCurrentTime() - ytStartOffset) / secPerMeasure) * COLS_PER_MEAS
+    ));
+  }
+}
+
+function setAudioMode(mode) {
+  audioMode = mode;
+  $('mode-synth').classList.toggle('active', mode === 'synth');
+  $('mode-original').classList.toggle('active', mode === 'original');
+  $('yt-offset-wrap').style.display = mode === 'original' ? 'flex' : 'none';
+  if (mode === 'original') {
+    const saved = currentSongId && localStorage.getItem('sync_' + currentSongId);
+    if (saved) {
+      $('yt-sync-status').textContent = 'Saved offset: ' + parseFloat(saved).toFixed(2) + 's';
+      $('btn-mark-start').textContent = '✓ Synced';
+      $('btn-mark-start').style.color = '#4caf50';
+    } else {
+      $('yt-sync-status').textContent = 'Click Sync when first note plays';
+      $('btn-mark-start').textContent = '📍 Sync';
+      $('btn-mark-start').style.color = '';
+    }
+  }
+
+  if (mode === 'original') {
+    // Stop all synth output immediately
+    if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null; }
+    eventTimeline = []; timelineIdx = 0;
+    // Silence any playing sampler notes
+    if (guitarSampler) {
+      try { guitarSampler.releaseAll(); } catch(e) {}
+    }
+    // Suspend Web Audio context so any lingering nodes go silent
+    if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+    // Show and unmute YouTube
+    $('yt-player-wrap').style.display = 'block';
+    if (ytPlayer && ytPlayer.unMute) ytPlayer.unMute();
+    if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(100);
+  } else {
+    // Synth mode: mute YouTube, resume Web Audio
+    $('yt-player-wrap').style.display = 'none';
+    if (ytPlayer && ytPlayer.mute) ytPlayer.mute();
+    ksDestNode = null;
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    // If playing, restart scheduler
+    if (playing) {
+      playStartAudio = audioCtx.currentTime + 0.05;
+      playStartCol   = currentCol;
+      eventTimeline  = buildTimeline(currentCol);
+      timelineIdx    = 0;
+      if (scheduleTimer) clearInterval(scheduleTimer);
+      scheduleTimer = setInterval(runScheduler, SCHEDULE_INT);
+      runScheduler();
+    }
+  }
+}
+
+// Load YouTube IFrame API
+const ytScript = document.createElement('script');
+ytScript.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(ytScript);
+
+window.onYouTubeIframeAPIReady = async function() {
+  ytReady = true;
+  if (window._pendingYtId) {
+    await initYouTubePlayer(window._pendingYtId);
+    window._pendingYtId = null;
+    setAudioMode('synth');
+  }
+};
+
+function extractVideoId(url) {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function initYouTubePlayer(videoId) {
+  return new Promise(resolve => {
+    // Always keep player hidden until user selects Original mode
+    $('yt-player-wrap').style.display = 'none';
+    if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
+
+    ytPlayer = new YT.Player('yt-player', {
+      height: '200',
+      width:  '100%',
+      videoId,
+      playerVars: {
+        autoplay:       0,
+        controls:       1,
+        rel:            0,
+        modestbranding: 1,
+        enablejsapi:    1,
+        origin:         window.location.origin,
+      },
+      events: {
+        onReady: () => {
+          ytPlayer.mute(); // always start muted; setAudioMode unmutes in Original
+          resolve();
+        },
+        onStateChange: e => {
+          if (e.data === YT.PlayerState.PAUSED && playing) pausePlay();
+          if (e.data === YT.PlayerState.ENDED)  stopPlayback();
+        }
+      }
+    });
+  });
+}
+
+async function attachYouTube() {
+  const url = $('yt-input').value.trim();
+  if (!url) return;
+  const videoId = extractVideoId(url);
+  if (!videoId) { alert('Invalid YouTube URL'); return; }
+  if (!ytReady) { alert('YouTube player not ready yet — try again in a second'); return; }
+  await initYouTubePlayer(videoId);
+  console.log('YouTube player ready for:', videoId);
+}
+
+
+
+
+
+</script>
+
+<div id="alphaTab" style="border:1px solid #ccc; border-radius:8px; min-height:400px; background:#fff;"></div>
+
+<!-- AlphaTab scripts -->
+
+
+<script src="alphaTab.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
